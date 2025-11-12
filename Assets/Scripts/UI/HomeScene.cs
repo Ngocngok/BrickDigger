@@ -17,11 +17,21 @@ namespace BrickDigger
         
         private int currentLevel;
         private int totalCoins;
+        private CharacterShopManager characterShop;
         
         private void Start()
         {
+            // Get character shop reference
+            characterShop = FindFirstObjectByType<CharacterShopManager>();
+            
             // Load player progress
             LoadProgress();
+            
+            // Sync coins with character shop
+            if (characterShop != null)
+            {
+                characterShop.SyncCoins(totalCoins);
+            }
             
             // Update UI
             UpdateUI();
