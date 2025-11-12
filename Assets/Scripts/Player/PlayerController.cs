@@ -32,6 +32,10 @@ namespace BrickDigger
         private bool isOnBedrock = false;
         private bool isJumping = false;
         private float lastSpeed = 0f;
+        private float jumpStartTime = 0f;
+        private float lastJumpEndTime = 0f;
+        private const float MIN_JUMP_DURATION = 0.3f; // Minimum time before jump can be reset
+        private const float JUMP_COOLDOWN = 0.2f; // Cooldown between jumps
         
         private CellCoord currentCell;
         private float targetHeight;
@@ -148,8 +152,8 @@ namespace BrickDigger
                     }
                 }
                 
-                // Auto-jump ONLY when standing on bedrock AND moving toward dirt block AND not already jumping
-                if (standingOnBedrock && isGrounded && !isJumping)
+                // Auto-jump ONLY when standing on bedrock AND moving toward dirt block AND not already jumping AND cooldown passed
+                if (standingOnBedrock && isGrounded && !isJumping && (Time.time - lastJumpEndTime) >= JUMP_COOLDOWN)
                 {
                     Vector3 moveDir = move.normalized;
                     // Check at the height of the dirt layer (1 unit up from bedrock)
@@ -163,12 +167,13 @@ namespace BrickDigger
                     {
                         velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
                         isJumping = true;
+                        jumpStartTime = Time.time;
                         
                         // Trigger jump animation for auto-jump ONCE
                         if (animator != null)
                         {
-                            animator.SetBool("IsJumping", true);
-                            Debug.Log("Auto-jump animation triggered!");
+                            animator.SetTrigger("Jump");
+                            Debug.Log($"Auto-jump animation triggered at {Time.time}");
                         }
                     }
                 }
@@ -204,30 +209,29 @@ namespace BrickDigger
                 }
             }
             
-            // Handle manual jump (works at all times when grounded)
-            if (jumpRequested && isGrounded && !isJumping)
+            // Handle manual jump (works at all times when grounded and cooldown passed)
+            if (jumpRequested && isGrounded && !isJumping && (Time.time - lastJumpEndTime) >= JUMP_COOLDOWN)
             {
                 velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
                 jumpRequested = false;
                 isJumping = true;
+                jumpStartTime = Time.time;
                 
                 // Trigger jump animation ONCE
                 if (animator != null)
                 {
-                    animator.SetBool("IsJumping", true);
-                    Debug.Log("Manual jump animation triggered!");
+                    animator.SetTrigger("Jump");
+                    Debug.Log($"Manual jump animation triggered at {Time.time}");
                 }
             }
             
-            // Reset jump animation when grounded and falling (only once)
-            if (isGrounded && velocity.y <= 0 && isJumping)
+            // Reset jump state when grounded and falling (only once)
+            // Also ensure minimum jump duration has passed to prevent premature reset
+            if (isGrounded && velocity.y <= 0 && isJumping && (Time.time - jumpStartTime) >= MIN_JUMP_DURATION)
             {
                 isJumping = false;
-                if (animator != null)
-                {
-                    animator.SetBool("IsJumping", false);
-                    Debug.Log("Jump animation reset - landed!");
-                }
+                lastJumpEndTime = Time.time;
+                Debug.Log($"Jump completed - landed at {Time.time} (duration: {Time.time - jumpStartTime:F2}s)");
             }
             
             // Apply gravity
