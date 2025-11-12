@@ -22,6 +22,7 @@ namespace BrickDigger
         
         private CharacterController characterController;
         private Animator animator;
+        private CharacterSpawner characterSpawner;
         
         private Vector2 moveInput;
         private Vector3 velocity;
@@ -29,6 +30,8 @@ namespace BrickDigger
         private bool isDigging;
         private bool canDig = true;
         private bool isOnBedrock = false;
+        private bool isJumping = false;
+        private float lastSpeed = 0f;
         
         private CellCoord currentCell;
         private float targetHeight;
@@ -48,7 +51,7 @@ namespace BrickDigger
                 characterController.center = new Vector3(0, 0.5f, 0);
             }
             
-            animator = GetComponent<Animator>();
+            characterSpawner = GetComponent<CharacterSpawner>();
         }
         
         private void Start()
@@ -57,6 +60,30 @@ namespace BrickDigger
                 gridManager = FindObjectOfType<GridManager>();
             if (gameManager == null)
                 gameManager = FindObjectOfType<GameManager>();
+            
+            // Get animator from spawned character
+            if (characterSpawner != null)
+            {
+                animator = characterSpawner.GetAnimator();
+            }
+            
+            // Fallback: try to get animator from children
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>();
+            }
+            
+            // Debug: Check animator setup
+            if (animator != null)
+            {
+                Debug.Log($"Animator found: {animator.gameObject.name}");
+                Debug.Log($"Animator controller: {animator.runtimeAnimatorController?.name}");
+                Debug.Log($"Animator enabled: {animator.enabled}");
+            }
+            else
+            {
+                Debug.LogError("No Animator found on character!");
+            }
                 
             // Start at a valid position
             PlaceOnGrid(new CellCoord(gridManager.Width / 2, gridManager.Height / 2));
@@ -112,30 +139,21 @@ namespace BrickDigger
                 int bedrockLayer = LayerMask.NameToLayer("Bedrock");
                 int dirtLayer = LayerMask.NameToLayer("Dirt");
                 
-                Debug.Log($"Bedrock Layer ID: {bedrockLayer}, Dirt Layer ID: {dirtLayer}");
-                
                 if (Physics.Raycast(transform.position, Vector3.down, out hit, 0.6f))
                 {
-                    Debug.Log($"Hit below: {hit.collider.gameObject.name}, Layer: {hit.collider.gameObject.layer}, LayerName: {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
-                    
                     // Check if hit object is on bedrock layer
                     if (hit.collider != null && hit.collider.gameObject.layer == bedrockLayer)
                     {
                         standingOnBedrock = true;
-                        Debug.Log("Standing on BEDROCK!");
                     }
                 }
                 
-                Debug.Log($"Standing on bedrock: {standingOnBedrock}, Is grounded: {isGrounded}");
-                
-                // Auto-jump ONLY when standing on bedrock AND moving toward dirt block
-                if (standingOnBedrock && isGrounded)
+                // Auto-jump ONLY when standing on bedrock AND moving toward dirt block AND not already jumping
+                if (standingOnBedrock && isGrounded && !isJumping)
                 {
                     Vector3 moveDir = move.normalized;
                     // Check at the height of the dirt layer (1 unit up from bedrock)
                     Vector3 checkPos = transform.position + moveDir * 0.6f + Vector3.up * 1f;
-                    
-                    Debug.Log($"Checking ahead at dirt height: {checkPos}");
                     
                     // Create layer mask to ONLY hit dirt layer
                     int dirtLayerMask = 1 << dirtLayer;
@@ -143,13 +161,15 @@ namespace BrickDigger
                     // Raycast down from dirt layer height to check if dirt block exists there
                     if (Physics.Raycast(checkPos, Vector3.down, out hit, 0.3f, dirtLayerMask))
                     {
-                        Debug.Log($"Hit DIRT ahead: {hit.collider.gameObject.name}, Layer: {hit.collider.gameObject.layer}");
-                        Debug.Log("AUTO JUMP TRIGGERED!");
                         velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
-                    }
-                    else
-                    {
-                        Debug.Log("No dirt block ahead at dirt layer height");
+                        isJumping = true;
+                        
+                        // Trigger jump animation for auto-jump ONCE
+                        if (animator != null)
+                        {
+                            animator.SetBool("IsJumping", true);
+                            Debug.Log("Auto-jump animation triggered!");
+                        }
                     }
                 }
                 
@@ -162,13 +182,52 @@ namespace BrickDigger
                     transform.rotation = Quaternion.Slerp(transform.rotation, 
                         Quaternion.LookRotation(move), Time.deltaTime * 10f);
                 }
+                
+                // Update animator speed parameter (only if changed)
+                if (animator != null)
+                {
+                    float currentSpeed = move.magnitude;
+                    if (Mathf.Abs(currentSpeed - lastSpeed) > 0.01f)
+                    {
+                        animator.SetFloat("Speed", currentSpeed);
+                        lastSpeed = currentSpeed;
+                    }
+                }
+            }
+            else
+            {
+                // Not moving, set speed to 0 (only if changed)
+                if (animator != null && lastSpeed > 0.01f)
+                {
+                    animator.SetFloat("Speed", 0f);
+                    lastSpeed = 0f;
+                }
             }
             
             // Handle manual jump (works at all times when grounded)
-            if (jumpRequested && isGrounded)
+            if (jumpRequested && isGrounded && !isJumping)
             {
                 velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
                 jumpRequested = false;
+                isJumping = true;
+                
+                // Trigger jump animation ONCE
+                if (animator != null)
+                {
+                    animator.SetBool("IsJumping", true);
+                    Debug.Log("Manual jump animation triggered!");
+                }
+            }
+            
+            // Reset jump animation when grounded and falling (only once)
+            if (isGrounded && velocity.y <= 0 && isJumping)
+            {
+                isJumping = false;
+                if (animator != null)
+                {
+                    animator.SetBool("IsJumping", false);
+                    Debug.Log("Jump animation reset - landed!");
+                }
             }
             
             // Apply gravity
