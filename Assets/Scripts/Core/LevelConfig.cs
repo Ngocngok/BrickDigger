@@ -37,9 +37,8 @@ namespace BrickDigger
             config.width = baseSize + sizeIncrease;
             config.height = 15;
             
-            // Axes and coins scale with map size
-            int totalCells = config.width * config.height;
-            config.axesStart = Mathf.Max(20, totalCells / 4); // About 25% of cells
+            // Axes: Simple formula - 10 for level 1, 11 for level 2, etc.
+            config.axesStart = 9 + levelNumber; // Level 1 = 10, Level 2 = 11, etc.
             config.coinsCount = 3 + (levelNumber / 2); // More coins at higher levels
             
             // Select random tetromino
