@@ -8,8 +8,8 @@ namespace BrickDigger
     {
         [Header("Movement Settings")]
         [SerializeField] private float moveSpeed = 5f;
-        [SerializeField] private float jumpForce = 5f;
-        [SerializeField] private float gravity = -9.81f;
+        [SerializeField] private float jumpForce = 3f; // Reduced for precise 1-block jump
+        [SerializeField] private float gravity = -20f; // Increased for faster falling
         [SerializeField] private float autoJumpHeight = 1.2f; // Height difference to trigger auto-jump
         
         [Header("Digging Settings")]
@@ -106,22 +106,50 @@ namespace BrickDigger
             
             if (move.magnitude > 0.1f)
             {
-                // Check for auto-jump ONLY when on bedrock (2nd layer)
-                if (isOnBedrock && isGrounded)
+                // Check for auto-jump: raycast down 0.1 units to see if standing on bedrock
+                RaycastHit hit;
+                bool standingOnBedrock = false;
+                int bedrockLayer = LayerMask.NameToLayer("Bedrock");
+                int dirtLayer = LayerMask.NameToLayer("Dirt");
+                
+                Debug.Log($"Bedrock Layer ID: {bedrockLayer}, Dirt Layer ID: {dirtLayer}");
+                
+                if (Physics.Raycast(transform.position, Vector3.down, out hit, 0.6f))
+                {
+                    Debug.Log($"Hit below: {hit.collider.gameObject.name}, Layer: {hit.collider.gameObject.layer}, LayerName: {LayerMask.LayerToName(hit.collider.gameObject.layer)}");
+                    
+                    // Check if hit object is on bedrock layer
+                    if (hit.collider != null && hit.collider.gameObject.layer == bedrockLayer)
+                    {
+                        standingOnBedrock = true;
+                        Debug.Log("Standing on BEDROCK!");
+                    }
+                }
+                
+                Debug.Log($"Standing on bedrock: {standingOnBedrock}, Is grounded: {isGrounded}");
+                
+                // Auto-jump ONLY when standing on bedrock AND moving toward dirt block
+                if (standingOnBedrock && isGrounded)
                 {
                     Vector3 moveDir = move.normalized;
-                    Vector3 nextPos = transform.position + moveDir * 0.6f; // Check slightly ahead
-                    CellCoord nextCell = gridManager.WorldToGrid(nextPos);
+                    // Check at the height of the dirt layer (1 unit up from bedrock)
+                    Vector3 checkPos = transform.position + moveDir * 0.6f + Vector3.up * 1f;
                     
-                    if (gridManager.IsValidCoord(nextCell))
+                    Debug.Log($"Checking ahead at dirt height: {checkPos}");
+                    
+                    // Create layer mask to ONLY hit dirt layer
+                    int dirtLayerMask = 1 << dirtLayer;
+                    
+                    // Raycast down from dirt layer height to check if dirt block exists there
+                    if (Physics.Raycast(checkPos, Vector3.down, out hit, 0.3f, dirtLayerMask))
                     {
-                        BlockType topBlockAhead = gridManager.GetTopBlockAt(nextCell);
-                        
-                        // Auto-jump if there's a dirt/coin block blocking the way
-                        if (topBlockAhead == BlockType.Dirt || topBlockAhead == BlockType.CoinBlock)
-                        {
-                            velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
-                        }
+                        Debug.Log($"Hit DIRT ahead: {hit.collider.gameObject.name}, Layer: {hit.collider.gameObject.layer}");
+                        Debug.Log("AUTO JUMP TRIGGERED!");
+                        velocity.y = Mathf.Sqrt(jumpForce * -2f * gravity);
+                    }
+                    else
+                    {
+                        Debug.Log("No dirt block ahead at dirt layer height");
                     }
                 }
                 

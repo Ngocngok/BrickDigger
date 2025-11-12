@@ -9,14 +9,17 @@ namespace BrickDigger
         [Header("Joystick Settings")]
         [SerializeField] private float joystickRadius = 100f;
         [SerializeField] private float deadZone = 0.1f;
+        [SerializeField] private bool dynamicJoystick = true;
         
         [Header("Visual Elements")]
         [SerializeField] private RectTransform joystickBackground;
         [SerializeField] private RectTransform joystickHandle;
+        [SerializeField] private CanvasGroup canvasGroup;
         
         private Vector2 inputVector;
-        private Vector2 joystickCenter;
+        private Vector2 touchStartPosition;
         private bool isActive = false;
+        private Canvas parentCanvas;
         
         private void Start()
         {
@@ -25,15 +28,59 @@ namespace BrickDigger
                 
             if (joystickHandle == null && transform.childCount > 0)
                 joystickHandle = transform.GetChild(0).GetComponent<RectTransform>();
-                
-            // Get the center position
-            joystickCenter = joystickBackground.position;
+            
+            if (canvasGroup == null)
+                canvasGroup = GetComponent<CanvasGroup>();
+            
+            parentCanvas = GetComponentInParent<Canvas>();
+            
+            // Hide joystick initially if dynamic
+            if (dynamicJoystick && canvasGroup != null)
+            {
+                canvasGroup.alpha = 0f;
+            }
         }
         
         public void OnPointerDown(PointerEventData eventData)
         {
             isActive = true;
-            OnDrag(eventData);
+            touchStartPosition = eventData.position;
+            
+            Debug.Log($"Touch at screen position: {eventData.position}");
+            
+            // Show joystick at touch position
+            if (dynamicJoystick)
+            {
+                // Get the parent canvas
+                Canvas canvas = GetComponentInParent<Canvas>();
+                RectTransform parentRect = joystickBackground.parent as RectTransform;
+                
+                Vector2 localPoint;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    parentRect,
+                    eventData.position,
+                    canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : eventData.pressEventCamera,
+                    out localPoint
+                );
+                
+                Debug.Log($"Local point: {localPoint}");
+                
+                joystickBackground.anchoredPosition = localPoint;
+                
+                if (canvasGroup != null)
+                {
+                    canvasGroup.alpha = 1f;
+                    Debug.Log("Joystick shown");
+                }
+            }
+            
+            // Reset handle to center (don't move character yet)
+            if (joystickHandle != null)
+            {
+                joystickHandle.anchoredPosition = Vector2.zero;
+            }
+            
+            inputVector = Vector2.zero;
         }
         
         public void OnPointerUp(PointerEventData eventData)
@@ -45,6 +92,12 @@ namespace BrickDigger
             if (joystickHandle != null)
             {
                 joystickHandle.anchoredPosition = Vector2.zero;
+            }
+            
+            // Hide joystick
+            if (dynamicJoystick && canvasGroup != null)
+            {
+                canvasGroup.alpha = 0f;
             }
         }
         

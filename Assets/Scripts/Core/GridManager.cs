@@ -209,6 +209,14 @@ namespace BrickDigger
             {
                 Vector3 position = coord.ToWorldPosition(layerHeight);
                 GameObject block = Instantiate(prefab, position, Quaternion.identity, transform);
+                
+                // Set layer for dirt blocks
+                int dirtLayer = LayerMask.NameToLayer("Dirt");
+                if (dirtLayer >= 0)
+                {
+                    block.layer = dirtLayer;
+                }
+                
                 topLayerBlocks[coord] = block;
             }
         }
@@ -220,6 +228,17 @@ namespace BrickDigger
             {
                 Vector3 position = coord.ToWorldPosition(0);
                 GameObject block = Instantiate(prefab, position, Quaternion.identity, transform);
+                
+                // Set layer for bedrock blocks
+                if (type == BlockType.Bedrock)
+                {
+                    int bedrockLayer = LayerMask.NameToLayer("Bedrock");
+                    if (bedrockLayer >= 0)
+                    {
+                        block.layer = bedrockLayer;
+                    }
+                }
+                
                 bottomLayerBlocks[coord] = block;
             }
         }
